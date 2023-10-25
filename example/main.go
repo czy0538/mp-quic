@@ -115,7 +115,7 @@ func main() {
 	}()
 	// runtime.SetBlockProfileRate(1)
 
-	verbose := flag.Bool("v", false, "verbose")
+	verbose := flag.Bool("v", true, "verbose")
 	bs := binds{}
 	flag.Var(&bs, "bind", "bind to")
 	certPath := flag.String("certpath", getBuildDir(), "certificate directory")
