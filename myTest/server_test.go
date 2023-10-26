@@ -17,7 +17,7 @@ import (
 	"testing"
 )
 
-const lAddr = "localhost:4242"
+const lAddr = "0.0.0.0:4242"
 
 func TestServer(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,33 +31,41 @@ func TestServer(t *testing.T) {
 	}
 
 	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-
-		}
 		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+
+			}
 			conn, err := listener.Accept()
 			if err != nil {
 				t.Fatal(err)
 			}
 			go func(conn quic.Session) {
-				fmt.Printf("get a new connection, remote addr: %s\n", conn.RemoteAddr().String())
-				stream, err := conn.AcceptStream()
-				if err != nil {
-					t.Fatal(err)
-				}
-				go func(stream quic.Stream) {
-					fmt.Printf("Server: Got a new stream %d\n", stream.StreamID())
-					// Echo through the loggingWriter
-					_, err = io.Copy(loggingWriter{stream}, stream)
-				}(stream)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
 
+					}
+					fmt.Printf("get a new connection, remote addr: %s\n", conn.RemoteAddr().String())
+					stream, err := conn.AcceptStream()
+					if err != nil {
+						t.Fatal(err)
+					}
+					go func(stream quic.Stream) {
+						fmt.Printf("Server: Got a new stream %d\n", stream.StreamID())
+						// Echo through the loggingWriter
+						_, err = io.Copy(loggingWriter{stream}, stream)
+					}(stream)
+				}
 			}(conn)
 
 		}
 	}()
+
 	select {
 	case <-c:
 		os.Exit(0)
