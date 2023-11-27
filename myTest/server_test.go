@@ -43,20 +43,19 @@ func TestServer(t *testing.T) {
 				t.Fatal(err)
 			}
 			go func(conn quic.Session) {
+				fmt.Printf("get a new connection, remote addr: %s\n", conn.RemoteAddr().String())
 				for {
 					select {
 					case <-ctx.Done():
 						return
 					default:
-
 					}
-					fmt.Printf("get a new connection, remote addr: %s\n", conn.RemoteAddr().String())
 					stream, err := conn.AcceptStream()
+					fmt.Printf("Server: Got a new stream %d\n", stream.StreamID())
 					if err != nil {
 						t.Fatal(err)
 					}
 					go func(stream quic.Stream) {
-						fmt.Printf("Server: Got a new stream %d\n", stream.StreamID())
 						// Echo through the loggingWriter
 						_, err = io.Copy(loggingWriter{stream}, stream)
 					}(stream)

@@ -17,17 +17,18 @@ import (
 )
 
 const (
-	rAddr   = "192.168.1.191:4242"
+	rAddr = "192.168.1.191:4242"
+	//rAddr   = "100.64.1.17:4242"
 	message = "quic-go test"
 )
 
-var streamNums = 2
+var streamNums = 10
 
 const OneYear = time.Second * 60 * 60 * 24 * 365
 
 func TestClient(t *testing.T) {
 
-	flag.IntVar(&streamNums, "n", 2, "stream nums")
+	flag.IntVar(&streamNums, "n", 5, "stream nums")
 	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -45,6 +46,7 @@ func TestClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(5 * time.Second)
 	wg := sync.WaitGroup{}
 	wg.Add(streamNums)
 	for i := 0; i < streamNums; i++ {
@@ -70,12 +72,38 @@ func TestClient(t *testing.T) {
 
 			}()
 		}(i)
-		time.Sleep(1 * time.Second)
 	}
 	wg.Wait()
+	time.Sleep(10 * time.Second)
+	t.Log("create new streams ")
+	wg.Add(streamNums)
+	for i := 0; i < streamNums; i++ {
+		go func(i int) {
+			stream, err := conn.OpenStream()
+			if err != nil {
+				t.Fatal(err)
+			}
+			fmt.Printf("Client %d: Sending '%s'\n", i, message)
+			_, err = stream.Write([]byte(strconv.Itoa(i) + message))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			go func() {
+				buf := make([]byte, len(message)+1)
+				_, err = io.ReadFull(stream, buf)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fmt.Printf("Client %d: Got '%s'\n", i, buf)
+				wg.Done()
+
+			}()
+		}(i)
+	}
+
 	select {
 	case <-c:
 	case <-ctx.Done():
-		//case <-readSuccess:
 	}
 }

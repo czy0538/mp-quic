@@ -68,13 +68,19 @@ func (pm *pathManager) setup(conn connection) {
 			utils.Errorf("path manager: encountered error while parsing remote addr: %v", remAddr)
 		}
 
+		// 这里添加的是第一个远程地址
 		if remAddr.IP.To4() != nil {
 			pm.remoteAddrs4 = append(pm.remoteAddrs4, *remAddr)
+			// 强行加入远程地址
+			//addr, _ := net.ResolveUDPAddr("udp", "100.64.1.17:4242")
+			//pm.remoteAddrs4 = append(pm.remoteAddrs4, *addr)
 		} else {
 			pm.remoteAddrs6 = append(pm.remoteAddrs6, *remAddr)
 		}
 	}
-
+	//// 强行加入远程地址
+	//addr, _ := net.ResolveUDPAddr("udp", "100.64.1.17:4242")
+	//pm.remoteAddrs4 = append(pm.remoteAddrs4, *addr)
 	// Launch the path manager
 	go pm.run()
 }
@@ -84,6 +90,7 @@ func (pm *pathManager) run() {
 	select {
 	case <-pm.runClosed:
 		return
+		// 握手完成后，尝试创建路径
 	case <-pm.handshakeCompleted:
 		if pm.sess.createPaths {
 			err := pm.createPaths()
@@ -93,12 +100,13 @@ func (pm *pathManager) run() {
 			}
 		}
 	}
-
+	// 完成握手后，进入到如下循环中。
 runLoop:
 	for {
 		select {
 		case <-pm.runClosed:
 			break runLoop
+			// 收到路径变化的通知，尝试创建路径
 		case <-pm.pconnMgr.changePaths:
 			if pm.sess.createPaths {
 				pm.createPaths()
@@ -160,6 +168,7 @@ func (pm *pathManager) createPath(locAddr net.UDPAddr, remAddr net.UDPAddr) erro
 	return pm.sess.sendPing(pth)
 }
 
+// 路径创建
 func (pm *pathManager) createPaths() error {
 	if utils.Debug() {
 		utils.Debugf("Path manager tries to create paths")

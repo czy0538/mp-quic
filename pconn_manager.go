@@ -31,7 +31,7 @@ type pconnManager struct {
 
 	rcvRawPackets chan *receivedRawPacket
 
-	changePaths chan struct{}
+	changePaths chan struct{} // 协调path创建，保证先扫描本地，再尝试创建
 	closeConns  chan struct{}
 	closed      chan struct{}
 	errorConn   chan error
@@ -133,6 +133,7 @@ func (pcm *pconnManager) run() {
 		pcm.createPconns()
 	}
 
+	// 通告进行路径创建
 	select {
 	case pcm.changePaths <- struct{}{}:
 	default:
@@ -146,6 +147,7 @@ func (pcm *pconnManager) run() {
 			<-pcm.timer.C
 		}
 	}
+	// 构建了一个2s的定时器，每两秒进行一次检查
 runLoop:
 	for {
 		select {
@@ -194,15 +196,19 @@ func (pcm *pconnManager) createPconn(ip net.IP) (*net.UDPAddr, error) {
 }
 
 func (pcm *pconnManager) createPconns() error {
+	// 获取本地的所有的接口
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return err
 	}
 	for _, i := range ifaces {
 		// TODO (QDC): do this in a generic way
-		if !strings.Contains(i.Name, "eth") && !strings.Contains(i.Name, "rmnet") && !strings.Contains(i.Name, "wlan") {
+		// 根据接口名进行第一波筛选
+		// 加入Tailscale的接口和软总线接口
+		if !strings.Contains(i.Name, "softbus") && !strings.Contains(i.Name, "tailscale") && !strings.Contains(i.Name, "eth") && !strings.Contains(i.Name, "rmnet") && !strings.Contains(i.Name, "wlan") {
 			continue
 		}
+		// 解析他们的地址
 		addrs, err := i.Addrs()
 		if err != nil {
 			return err
@@ -218,6 +224,7 @@ func (pcm *pconnManager) createPconns() error {
 			}
 			// TODO (QDC): Clearly not optimal
 			found := false
+			// 判断该地址是否已经被添加
 		lookingLoop:
 			for _, locAddr := range pcm.localAddrs {
 				if ip.Equal(locAddr.IP) {
@@ -225,15 +232,35 @@ func (pcm *pconnManager) createPconns() error {
 					break lookingLoop
 				}
 			}
+			// 创建Pconn，并追加入本地地址
 			if !found {
+				// 创建udp connection，并进行侦听
+				// 同时将描述符加入pconns
 				locAddr, err := pcm.createPconn(ip)
 				if err != nil {
 					return err
 				}
 				pcm.localAddrs = append(pcm.localAddrs, *locAddr)
+				utils.Debugf("Added local address %s", locAddr.String())
 			}
 		}
 	}
+	// begin
+	// 强行添加本地端口
+	// ip := net.ParseIP("100.64.1.150")
+	//ip := net.ParseIP("192.168.1.50")
+	//for _, locAddr := range pcm.localAddrs {
+	//	if ip.Equal(locAddr.IP) {
+	//		return nil
+	//	}
+	//}
+	//locAddr, err := pcm.createPconn(ip)
+	//if err != nil {
+	//	return err
+	//}
+	//pcm.localAddrs = append(pcm.localAddrs, *locAddr)
+	//utils.Debugf("Added local address %s", locAddr.String())
+	// end
 	return nil
 }
 
